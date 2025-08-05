@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,14 +35,24 @@ import com.example.quemefaltahacer.ui.theme.QueMeFaltaHacerTheme
 import Data.TaskDatabase
 import Data.TaskEntity
 import Data.TaskRepository
+import android.content.Intent
+import androidx.compose.animation.core.EaseInOutCubic
 import androidx.compose.animation.core.EaseInOutSine
+import androidx.compose.animation.core.EaseOutBounce
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 
 class MainActivity : ComponentActivity() {
     private lateinit var repository: TaskRepository
@@ -52,6 +63,7 @@ class MainActivity : ComponentActivity() {
 
         val database = TaskDatabase.getDatabase(this)
         repository = TaskRepository(database.taskDao())
+        startService(Intent(this, MusicService::class.java))
 
         setContent {
             QueMeFaltaHacerTheme {
@@ -65,94 +77,178 @@ class MainActivity : ComponentActivity() {
 fun MainScreen(repository: TaskRepository) {
     var showBottomSheet by remember { mutableStateOf(false) }
     var showHistorySheet by remember { mutableStateOf(false) }
+    var showAuthorSheet by remember { mutableStateOf(false) }
     val pendingTasks by repository.getPendingTasks().collectAsState(initial = emptyList())
     val completedTasks by repository.getCompletedTasks().collectAsState(initial = emptyList())
     val coroutineScope = rememberCoroutineScope()
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // BOX PRINCIPAL CON PADDING PARA PANTALLAS CON NOTCH/CÁMARA GOTA
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF5F5F5))
+            // SOLUCIÓN: WindowInsets para evitar el notch/cámara gota
+            .windowInsetsPadding(WindowInsets.systemBars),
+        contentAlignment = Alignment.Center
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFFF5F5F5))
+                .padding(horizontal = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Título más arriba
-            TituloConNube(
-                fontSize = 30,
-                onPlusClick = { showBottomSheet = true }
-            )
 
-            // Lista de tareas (ocupa todo el espacio disponible)
-            TaskList(
-                tasks = pendingTasks,
-                onTaskComplete = { task ->
-                    coroutineScope.launch {
-                        repository.toggleTaskCompletion(task)
-                    }
-                },
-                modifier = Modifier.weight(1f)
-            )
-        }
+            // === HEADER SECTION (20% de la pantalla - MÁS ESPACIO) ===
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.20f), // Aumentado de 0.15f a 0.20f
+                contentAlignment = Alignment.TopCenter
+            ) {
+                // InfoButton en la esquina superior derecha
+                InfoButton(
+                    onClick = { showAuthorSheet = true },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 16.dp, end = 8.dp) // Más padding superior
+                )
 
-        // Parte inferior fija
-        BottomSectionFixed(
-            onHistoryClick = { showHistorySheet = true },
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
-
-        // Modal para agregar tareas
-        AddTaskBottomSheet(
-            isVisible = showBottomSheet,
-            onDismiss = { showBottomSheet = false },
-            onSaveTask = { description ->
-                coroutineScope.launch {
-                    repository.insertTask(description)
-                }
+                // Título centrado con nube MÁS GRANDE
+                TituloConNubeOptimizado(
+                    fontSize = 32, // Aumentado de 28 a 32
+                    onPlusClick = { showBottomSheet = true },
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(top = 24.dp) // Más separación del borde superior
+                )
             }
-        )
 
-        // Modal para historial
-        HistoryBottomSheet(
-            isVisible = showHistorySheet,
-            onDismiss = { showHistorySheet = false },
-            completedTasks = completedTasks
+            // === CONTENT SECTION (55% de la pantalla - REDUCIDO) ===
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(0.55f), // Reducido de 0.65f a 0.55f
+                contentAlignment = Alignment.Center
+            ) {
+                TaskListOptimizada(
+                    tasks = pendingTasks,
+                    onTaskComplete = { task ->
+                        coroutineScope.launch {
+                            repository.toggleTaskCompletion(task)
+                        }
+                    }
+                )
+            }
+
+            // === BOTTOM SECTION (25% de la pantalla - MÁS ESPACIO PARA GATOS) ===
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.25f), // Aumentado de 0.20f a 0.25f
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                BottomSectionOptimizada(
+                    onHistoryClick = { showHistorySheet = true }
+                )
+            }
+        }
+    }
+
+    // Modales
+    AddTaskBottomSheet(
+        isVisible = showBottomSheet,
+        onDismiss = { showBottomSheet = false },
+        onSaveTask = { description ->
+            coroutineScope.launch {
+                repository.insertTask(description)
+            }
+        }
+    )
+
+    HistoryBottomSheet(
+        isVisible = showHistorySheet,
+        onDismiss = { showHistorySheet = false },
+        completedTasks = completedTasks
+    )
+
+    AuthorBottomSheet(
+        isVisible = showAuthorSheet,
+        onDismiss = { showAuthorSheet = false }
+    )
+}
+
+// === BOTÓN INFO OPTIMIZADO ===
+@Composable
+fun InfoButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Animación continua de brillo
+    val infiniteTransition = rememberInfiniteTransition(label = "shine")
+    val shimmer by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "shimmer"
+    )
+
+    IconButton(
+        onClick = onClick,
+        modifier = modifier
+            .size(56.dp)
+            .background(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF2196F3).copy(alpha = shimmer),
+                        Color(0xFF1976D2).copy(alpha = 0.9f),
+                        Color(0xFF0D47A1)
+                    ),
+                    radius = 80f
+                ),
+                shape = CircleShape
+            )
+    ) {
+        Icon(
+            imageVector = Icons.Default.Info,
+            contentDescription = "Información del autor",
+            tint = Color.White,
+            modifier = Modifier.size(28.dp)
         )
     }
 }
 
+// === TÍTULO OPTIMIZADO CON NUBE MÁS GRANDE ===
 @Composable
-fun BottomSectionFixed(
-    onHistoryClick: () -> Unit,
+fun TituloConNubeOptimizado(
+    fontSize: Int,
+    onPlusClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "sway")
-
-    // Animación más sutil
-    val swayAnimation by infiniteTransition.animateFloat(
-        initialValue = -3f,
-        targetValue = 3f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(
-                durationMillis = 3000,
-                easing = EaseInOutSine
-            ),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "sway"
-    )
-
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(Color(0xFFF5F5F5))
-            .padding(bottom = 16.dp),
+        modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Botón más pequeño
-        // Nube más pequeña clickeable como botón
-        Box(
+        // Botón + más grande
+        IconButton(
+            onClick = onPlusClick,
             modifier = Modifier
-                .size(180.dp)
-                .clickable { onHistoryClick() } // Al tocar la nube, se llama la función
+                .size(70.dp) // Aumentado de 60dp a 70dp
+                .padding(2.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "Agregar",
+                tint = Color(0xFF0099CC),
+                modifier = Modifier.size(50.dp) // Aumentado de 40dp a 50dp
+            )
+        }
+
+        // Nube con texto MÁS GRANDE
+        Box(
+            modifier = Modifier.size(200.dp) // Aumentado de 160dp a 200dp
         ) {
             Image(
                 painter = painterResource(id = R.drawable.fondo),
@@ -161,48 +257,295 @@ fun BottomSectionFixed(
             )
 
             Text(
-                text = "¿Qué hice hoy?",
+                text = "CHECKLIST",
                 modifier = Modifier.align(Alignment.Center),
                 style = TextStyle(
-                    fontSize = 14.sp,
+                    fontSize = fontSize.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF0099CC)
                 )
             )
         }
+    }
+}
 
-        Spacer(modifier = Modifier.height(8.dp))
+// === LISTA DE TAREAS OPTIMIZADA ===
+@Composable
+fun TaskListOptimizada(
+    tasks: List<TaskEntity>,
+    onTaskComplete: (TaskEntity) -> Unit
+) {
+    if (tasks.isEmpty()) {
+        // Estado vacío mejorado
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Text(
+                text = "¡No hay tareas pendientes!",
+                style = TextStyle(
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF666666)
+                )
+            )
 
-        // Imágenes más grandes con animación sutil
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Presiona + para agregar una nueva tarea",
+                style = TextStyle(
+                    fontSize = 14.sp,
+                    color = Color(0xFF999999)
+                )
+            )
+        }
+    } else {
+        // Lista de tareas con scroll suave
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(vertical = 16.dp)
+        ) {
+            items(tasks) { task ->
+                TaskItemOptimizada(
+                    task = task,
+                    onTaskComplete = onTaskComplete
+                )
+            }
+        }
+    }
+}
+
+// === ITEM DE TAREA OPTIMIZADO ===
+@Composable
+fun TaskItemOptimizada(
+    task: TaskEntity,
+    onTaskComplete: (TaskEntity) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 4.dp
+        )
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 32.dp)
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Indicador visual
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(Color(0xFF0099CC), CircleShape)
+            )
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // Texto de la tarea
+            Text(
+                text = task.description,
+                modifier = Modifier.weight(1f),
+                style = TextStyle(
+                    fontSize = 16.sp,
+                    color = Color(0xFF333333),
+                    lineHeight = 24.sp
+                )
+            )
+
+            // Botón de completar mejorado
+            IconButton(
+                onClick = { onTaskComplete(task) },
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(
+                        Color(0xFF0099CC).copy(alpha = 0.1f),
+                        CircleShape
+                    )
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ico),
+                    contentDescription = "Completar tarea",
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+    }
+}
+
+// === SECCIÓN INFERIOR OPTIMIZADA CON GATOS MÁS GRANDES Y VISIBLES ===
+@Composable
+fun BottomSectionOptimizada(
+    onHistoryClick: () -> Unit
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "sway")
+
+    val swayAnimation by infiniteTransition.animateFloat(
+        initialValue = -3f, // Más movimiento
+        targetValue = 3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 4000,
+                easing = EaseInOutSine
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "sway"
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 16.dp), // Más padding inferior
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // GATOS Y BOTÓN EN LA MISMA FILA
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
                 .offset(x = swayAnimation.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.Bottom
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            // Gato 2 - Izquierda
             Image(
-                painter = painterResource(id = R.drawable.gato1),
-                contentDescription = null,
+                painter = painterResource(id = R.drawable.gato2),
+                contentDescription = "Gato 2",
                 modifier = Modifier.size(100.dp)
             )
 
-            Image(
-                painter = painterResource(id = R.drawable.gato2),
-                contentDescription = null,
-                modifier = Modifier.size(80.dp)
-            )
+            // Botón de historial en el centro
+            Card(
+                modifier = Modifier
+                    .size(140.dp)
+                    .clickable { onHistoryClick() },
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.Transparent
+                ),
+                elevation = CardDefaults.cardElevation(
+                    defaultElevation = 0.dp
+                )
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.fondo),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize()
+                    )
 
+                    Text(
+                        text = "¿Qué hice hoy?",
+                        style = TextStyle(
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0099CC)
+                        )
+                    )
+                }
+            }
+
+            // Gato 3 - Derecha
             Image(
                 painter = painterResource(id = R.drawable.gato3),
-                contentDescription = null,
-                modifier = Modifier.size(105.dp)
+                contentDescription = "Gato 3",
+                modifier = Modifier.size(100.dp)
             )
         }
     }
 }
 
+// === MODAL DEL AUTOR ===
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AuthorBottomSheet(
+    isVisible: Boolean,
+    onDismiss: () -> Unit
+) {
+    val bottomSheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = false
+    )
+
+    if (isVisible) {
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = bottomSheetState,
+            containerColor = Color.White,
+            contentColor = Color.Black,
+            modifier = Modifier.fillMaxHeight(0.6f)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Acerca del Desarrollador",
+                    style = TextStyle(
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0099CC)
+                    ),
+                    modifier = Modifier.padding(bottom = 24.dp)
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.author),
+                        contentDescription = "Foto del autor",
+                        modifier = Modifier
+                            .size(120.dp)
+                            .background(Color.Gray.copy(0.1f), CircleShape)
+                    )
+
+                    Column {
+                        Text(
+                            text = "Autor:",
+                            style = TextStyle(
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0099CC)
+                            ),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        Text(
+                            text = "César Jesus Dose Preciado Calderon",
+                            style = TextStyle(
+                                fontSize = 14.sp,
+                                color = Color.Black
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+        }
+    }
+}
+
+// === MODAL HISTORIAL ===
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryBottomSheet(
@@ -283,54 +626,7 @@ fun HistoryBottomSheet(
     }
 }
 
-@Composable
-fun TaskList(
-    tasks: List<TaskEntity>,
-    onTaskComplete: (TaskEntity) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    LazyColumn(
-        modifier = modifier.padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(tasks) { task ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.White, RoundedCornerShape(8.dp))
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .background(Color.Black, CircleShape)
-                )
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Text(
-                    text = task.description,
-                    modifier = Modifier.weight(1f),
-                    fontSize = 16.sp
-                )
-
-                IconButton(
-                    onClick = { onTaskComplete(task) },
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ico),
-                        contentDescription = null,
-                        tint = Color.Unspecified,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
+// === MODAL AGREGAR TAREA ===
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddTaskBottomSheet(
@@ -436,58 +732,15 @@ fun AddTaskBottomSheet(
     }
 }
 
-@Composable
-fun TituloConNube(fontSize: Int, onPlusClick: () -> Unit) {
-    val imageSize = 220.dp
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Botón + más arriba
-        IconButton(
-            onClick = onPlusClick,
-            modifier = Modifier
-                .size(80.dp)
-                .padding(top = 10.dp, bottom = 4.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "Agregar",
-                tint = Color(0xFF0099CC),
-                modifier = Modifier.size(52.dp)
-            )
-        }
-
-        // Nube con texto
-        Box(
-            modifier = Modifier.size(imageSize)
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.fondo),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize()
-            )
-
-            Text(
-                text = "CHECKLIST",
-                modifier = Modifier.align(Alignment.Center),
-                style = TextStyle(
-                    fontSize = fontSize.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0099CC)
-                )
-            )
-        }
-    }
-}
-
+// === PREVIEW ===
 @Preview(showBackground = true)
 @Composable
-fun TituloConNubePreview() {
+fun MainScreenPreview() {
     QueMeFaltaHacerTheme {
+        // Preview básico sin repository
         Column {
-            TituloConNube(fontSize = 30, onPlusClick = {})
+            TituloConNubeOptimizado(fontSize = 32, onPlusClick = {})
+            BottomSectionOptimizada(onHistoryClick = {})
         }
     }
 }

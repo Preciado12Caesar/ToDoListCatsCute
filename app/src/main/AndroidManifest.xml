@@ -6,30 +6,35 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/logo"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@drawable/ico"
         android:supportsRtl="true"
         android:theme="@style/Theme.QueMeFaltaHacer" >
+
+        <!-- El service debe ir DENTRO de application -->
+        <service android:name=".MusicService" />
+
         <activity
             android:name=".SplashActivity"
             android:exported="true"
-            android:label="@string/title_activity_splash"
+            android:icon="@drawable/logo"
+            android:label="TO-DO-ARI"
             android:theme="@style/Theme.QueMeFaltaHacer"
             tools:ignore="MissingClass">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.QueMeFaltaHacer" >
-
         </activity>
+
     </application>
 
 </manifest>
